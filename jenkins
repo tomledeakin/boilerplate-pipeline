@@ -36,7 +36,6 @@ pipeline {
 
             }
         }
-
         stage ('Release') {
             steps {
                 echo 'Deploying to Production environment...'
