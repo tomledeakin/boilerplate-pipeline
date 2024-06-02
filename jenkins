@@ -1,0 +1,75 @@
+pipeline {
+    agent any
+    
+    stages {
+        stage('Build') {
+            steps {
+                echo 'Build'
+                git branch: 'master', url: 'https://github.com/tomledeakin/boilerplate'
+
+                // window: bat || ubuntu: sh
+
+                // remove container windows
+                // bat 'docker container rm -f boilerplate_container 2>NUL || echo.'
+
+                // remove container ubuntu
+                // sh 'docker container rm -f boilerplate_container 2>/dev/null || true'
+
+                // bat 'docker stop boilerplate_container'
+                // bat 'docker rmi boilerplate -f'
+                bat 'docker build -t tomledeakin/boilerplate:latest -f Dockerfile .'
+                bat 'npm install'
+            }
+        }
+        stage('Test') {
+            steps {
+                bat "npm run test"
+            }
+        }
+        stage('Deploy') {
+            steps {
+                script {
+                    withDockerRegistry(credentialsId: 'docker-hub', url: 'https://index.docker.io/v1/') {
+                        docker.image('tomledeakin/boilerplate:latest').push()
+                    }
+                }
+
+            }
+        }
+
+        stage ('Release') {
+            steps {
+                echo 'Deploying to Production environment...'
+                echo 'Copy project over SSH...'
+                sshPublisher(publishers: [
+                    sshPublisherDesc(
+                        configName: 'aws',
+                        transfers:
+                            [sshTransfer(
+                                cleanRemote: false,
+                                excludes: '',
+                                execCommand: 'cd BoilerplateProject \
+                                && docker stop boilerplate_container || true \
+                                && docker container rm boilerplate_container || true \
+                                && docker rmi tomledeakin/boilerplate || true \
+                                && docker compose -f docker-compose.yml up -d',
+                                execTimeout: 1200000,
+                                flatten: false,
+                                makeEmptyDirs: false,
+                                noDefaultExcludes: false,
+                                patternSeparator: '[, ]+',
+                                remoteDirectory: 'BoilerplateProject',
+                                remoteDirectorySDF: false,
+                                removePrefix: '',
+                                sourceFiles: 'docker-compose.yml'
+                            )],
+                        usePromotionTimestamp: false,
+                        useWorkspaceInPromotion: false,
+                        verbose: true
+                    )
+                ])
+            }
+        }
+    }
+
+}
